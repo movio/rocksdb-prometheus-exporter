@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='rocksdb-prometheus-exporter',
-    version='0.1.0',
+    version='0.2.0',
     description='RocksDB Prometheus exporter',
     url='https://github.com/movio/rocksdb-prometheus-exporter',
     author='Nicolas Maquet',

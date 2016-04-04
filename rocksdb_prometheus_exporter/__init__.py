@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 
 import os
-import json
+import glob
 import argparse
 import time
+import itertools
 from prometheus_client import start_http_server, Gauge, REGISTRY
 from threading import Lock, Thread
 
@@ -109,6 +110,8 @@ def main():
     set_gauges_ttl(args.ttl)
     start_http_server(args.port)
     start_ttl_watchdog_thread()
+
+    paths = list(itertools.chain(*[ glob.glob(path_pattern) for path_pattern in args.paths ]))
 
     while True:
         update_rocksdb_metrics(args.paths)
