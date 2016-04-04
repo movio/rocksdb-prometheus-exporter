@@ -94,7 +94,7 @@ def update_rocksdb_metrics(dir_paths):
         ])
         for sst_abspath in current_sst_abspaths:
             update_bytes_written_metric(dir_abs_path, sst_abspath)
-        for sst_abspath in SST_ABSPATH_TO_SIZE_IN_BYTES.keys():
+        for sst_abspath in [ path for path in SST_ABSPATH_TO_SIZE_IN_BYTES.keys() if path.startswith(dir_abs_path) ]:
             update_bytes_compacted_metric(dir_abs_path, sst_abspath)
 
 def main():
