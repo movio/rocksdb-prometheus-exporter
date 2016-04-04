@@ -68,7 +68,10 @@ def file_extension(path):
     return os.path.splitext(path)[1]
 
 def update_bytes_written_metric(dir_abs_path, sst_abspath):
-    sst_file_size = os.stat(sst_abspath).st_size
+    try:
+        sst_file_size = os.stat(sst_abspath).st_size
+    except OSError:
+        return
     if sst_abspath not in SST_ABSPATH_TO_SIZE_IN_BYTES:
         incrementGaugeValue("rocksdb:sst_file_bytes_written", ["dir_abs_path"], [ dir_abs_path ], sst_file_size)
     else:
