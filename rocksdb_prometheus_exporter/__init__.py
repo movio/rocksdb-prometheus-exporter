@@ -19,14 +19,25 @@ SST_ABSPATH_TO_SIZE_IN_BYTES = {}
 def metric_name_escape(name):
     return name.replace(".", "_").replace("-", "_").replace(" ", "_")
 
-def incrementGaugeValue(name, labels, labelValues, amount, description = ""):
+def incrementAbsPathGaugeValue(name, abs_path, amount, description = ""):
+    labels = [ "dir_abs_path" ]
+    label_values = [ abs_path ]
+    i = 0
+    while abs_path != os.sep:
+        abs_path, basename = os.path.split(abs_path)
+        labels += [ 'dir_%d' % i ]
+        label_values += [ basename ]
+        i += 1
+    incrementGaugeValue(name, labels, label_values, amount, description)
+
+def incrementGaugeValue(name, labels, label_values, amount, description = ""):
     with GAUGES_LOCK:
         name = metric_name_escape(name)
         if name not in GAUGES:
             GAUGES[name] = Gauge(name, description, labels)
         if labels:
-            GAUGES[name].labels(*labelValues).inc(amount)
-            GAUGES_LABELS_LAST_UPDATE[(name, tuple(labelValues))] = time.time()
+            GAUGES[name].labels(*label_values).inc(amount)
+            GAUGES_LABELS_LAST_UPDATE[(name, tuple(label_values))] = time.time()
         else:
             GAUGES[name].inc(amount)
         GAUGES_LAST_UPDATE[name] = time.time()
@@ -73,15 +84,15 @@ def update_bytes_written_metric(dir_abs_path, sst_abspath):
     except OSError:
         return
     if sst_abspath not in SST_ABSPATH_TO_SIZE_IN_BYTES:
-        incrementGaugeValue("rocksdb:sst_file_bytes_written", ["dir_abs_path"], [ dir_abs_path ], sst_file_size)
+        incrementAbsPathGaugeValue("rocksdb:sst_file_bytes_written", dir_abs_path, sst_file_size)
     else:
         previous_sst_file_size = SST_ABSPATH_TO_SIZE_IN_BYTES[sst_abspath]
-        incrementGaugeValue("rocksdb:sst_file_bytes_written", ["dir_abs_path"], [ dir_abs_path ], sst_file_size - previous_sst_file_size)
+        incrementAbsPathGaugeValue("rocksdb:sst_file_bytes_written", dir_abs_path, sst_file_size - previous_sst_file_size)
     SST_ABSPATH_TO_SIZE_IN_BYTES[sst_abspath] = sst_file_size
 
 def update_bytes_compacted_metric(dir_abs_path, sst_abspath):
     if not os.path.exists(sst_abspath):
-        incrementGaugeValue("rocksdb:sst_file_bytes_compacted", ["dir_abs_path"], [ dir_abs_path ], SST_ABSPATH_TO_SIZE_IN_BYTES[sst_abspath])
+        incrementAbsPathGaugeValue("rocksdb:sst_file_bytes_compacted", dir_abs_path, SST_ABSPATH_TO_SIZE_IN_BYTES[sst_abspath])
         del SST_ABSPATH_TO_SIZE_IN_BYTES[sst_abspath]
 
 def update_rocksdb_metrics(dir_paths):
