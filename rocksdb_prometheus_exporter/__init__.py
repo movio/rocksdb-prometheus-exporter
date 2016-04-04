@@ -19,7 +19,7 @@ SST_ABSPATH_TO_SIZE_IN_BYTES = {}
 def metric_name_escape(name):
     return name.replace(".", "_").replace("-", "_").replace(" ", "_")
 
-def incrementAbsPathGaugeValue(name, abs_path, amount, description = ""):
+def abs_path_to_labels(abs_path):
     labels = [ "dir_abs_path" ]
     label_values = [ abs_path ]
     i = 0
@@ -28,6 +28,10 @@ def incrementAbsPathGaugeValue(name, abs_path, amount, description = ""):
         labels += [ 'dir_%d' % i ]
         label_values += [ basename ]
         i += 1
+    return labels, label_values
+
+def incrementAbsPathGaugeValue(name, abs_path, amount, description = ""):
+    labels, label_values = abs_path_to_labels(abs_path)
     incrementGaugeValue(name, labels, label_values, amount, description)
 
 def incrementGaugeValue(name, labels, label_values, amount, description = ""):
@@ -40,6 +44,22 @@ def incrementGaugeValue(name, labels, label_values, amount, description = ""):
             GAUGES_LABELS_LAST_UPDATE[(name, tuple(label_values))] = time.time()
         else:
             GAUGES[name].inc(amount)
+        GAUGES_LAST_UPDATE[name] = time.time()
+
+def setAbsPathGaugeValue(name, abs_path, value, description =""):
+    labels, label_values = abs_path_to_labels(abs_path)
+    setGaugeValue(name, labels, label_values, value, description)
+
+def setGaugeValue(name, labels, label_values, value, description =""):
+    with GAUGES_LOCK:
+        name = metric_name_escape(name)
+        if name not in GAUGES:
+            GAUGES[name] = Gauge(name, description, labels)
+        if labels:
+            GAUGES[name].labels(*label_values).set(value)
+            GAUGES_LABELS_LAST_UPDATE[(name, tuple(label_values))] = time.time()
+        else:
+            GAUGES[name].set(value)
         GAUGES_LAST_UPDATE[name] = time.time()
 
 def set_gauges_ttl(ttl):
@@ -78,6 +98,18 @@ def ttl_watchdog():
 def file_extension(path):
     return os.path.splitext(path)[1]
 
+def update_sst_file_count_metric(dir_abs_path, current_sst_abspaths):
+    setAbsPathGaugeValue("rocksdb:sst_file_count", dir_abs_path, len(current_sst_abspaths))
+
+def update_store_size_metric(dir_abs_path, current_sst_abspaths):
+    store_size = 0
+    for path in current_sst_abspaths:
+        try:
+            store_size += os.stat(path).st_size
+        except OSError:
+            continue
+    setAbsPathGaugeValue("rocksdb:store_size", dir_abs_path, store_size)
+
 def update_bytes_written_metric(dir_abs_path, sst_abspath):
     try:
         sst_file_size = os.stat(sst_abspath).st_size
@@ -103,6 +135,8 @@ def update_rocksdb_metrics(dir_paths):
             for sst_basename in os.listdir(dir_path)
             if file_extension(sst_basename) == '.sst'
         ])
+        update_sst_file_count_metric(dir_abs_path, current_sst_abspaths)
+        update_store_size_metric(dir_abs_path, current_sst_abspaths)
         for sst_abspath in current_sst_abspaths:
             update_bytes_written_metric(dir_abs_path, sst_abspath)
         for sst_abspath in [ path for path in SST_ABSPATH_TO_SIZE_IN_BYTES.keys() if path.startswith(dir_abs_path) ]:
